@@ -16,9 +16,92 @@
     button.flash { background-color: #bbb; }
     .start-button { width: 400px; padding: 10px 0; font-weight: bold; font-size: 18px; text-align: center; background-color: lightgray; border: 2px solid black; cursor: pointer; height: 50px; }
     #groupOverlay button { width: 120px; height: 80px; font-size: 24px; font-weight: bold; }
+    /* Overrides global square grid buttons — compact horizontal bar for sheet actions */
+    button.sheet-action-btn {
+      width: auto;
+      max-width: 100%;
+      aspect-ratio: auto;
+      min-height: auto;
+      padding: 6px 14px;
+      font-size: 14px;
+      font-weight: bold;
+      margin-top: 8px;
+    }
+    /* OPTIONAL DEBUG: hotspot + menu + .debug-dummy; remove when dropping sheet test tools */
+    #participantDebugHotspot {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 44px;
+      height: 44px;
+      aspect-ratio: auto;
+      min-height: auto;
+      z-index: 2050;
+      padding: 0;
+      margin: 0;
+      border: none;
+      background: transparent;
+      opacity: 0.04;
+      cursor: pointer;
+    }
+    #participantDebugHotspot:hover {
+      opacity: 0.2;
+    }
+    #participantDebugMenu {
+      display: none;
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 2100;
+      min-width: 280px;
+      max-width: 90vw;
+      padding: 20px 24px;
+      background: #1e1e1e;
+      border: 1px solid #555;
+      border-radius: 8px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+      text-align: center;
+    }
+    #participantDebugMenu h3 {
+      margin: 0 0 14px 0;
+      font-size: 16px;
+      color: #fc6;
+    }
+    button.sheet-action-btn.debug-dummy {
+      background: #333;
+      color: #fc6;
+      border: 1px solid #fc6;
+    }
   </style>
 </head>
 <body>
+
+<!-- Participant Info Overlay -->
+<div id="participantOverlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#111;color:white;display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:2000;">
+  <h2>Participant Information</h2>
+  <div style="display:flex;flex-direction:column;gap:15px;margin-top:20px;">
+    <input id="initialsInput" type="text" placeholder="Initials" style="padding:10px;font-size:16px;">
+    <input id="ageInput" type="number" placeholder="Age" style="padding:10px;font-size:16px;">
+    <select id="sexInput" style="padding:10px;font-size:16px;">
+      <option value="">Select Sex</option>
+      <option value="Male">Male</option>
+      <option value="Female">Female</option>
+      <option value="Other">Other</option>
+      <option value="Prefer not to say">Prefer not to say</option>
+    </select>
+    <button type="button" class="sheet-action-btn" onclick="submitParticipantInfo()">Continue</button>
+  </div>
+  <!-- OPTIONAL DEBUG: corner hotspot opens debug menu (see #participantDebugMenu); remove hotspot + menu for production -->
+  <button type="button" id="participantDebugHotspot" onclick="openParticipantDebugMenu()" aria-label="Open debug menu" title=""></button>
+  <div id="participantDebugMenu" role="dialog" aria-label="Debug menu">
+    <h3>Debug</h3>
+    <button type="button" class="sheet-action-btn debug-dummy" onclick="sendDebugDummyRowToSheet()">Send dummy row to Google Sheet</button>
+    <p id="debugSendStatus" style="margin-top:10px;font-size:13px;color:#aaa;min-height:1.4em;"></p>
+    <button type="button" class="sheet-action-btn" style="margin-top:14px;" onclick="closeParticipantDebugMenu()">Close</button>
+  </div>
+</div>
+
 <div id="groupOverlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#222;color:white;display:flex;flex-direction:column;justify-content:center;align-items:center;z-index:1000;">
   <h2>Select Group</h2>
   <div style="display:grid;grid-template-columns:repeat(3,120px);gap:20px;margin-top:20px;">
@@ -30,6 +113,7 @@
     <button onclick="selectGroup(6)">6</button>
   </div>
 </div>
+
 <div class="container">
   <div class="instructions">
     <h2>Instructions</h2>
@@ -42,7 +126,19 @@
     <div class="grid" id="grid"></div>
   </div>
 </div>
+
 <script>
+  /*
+   * Optional: comment out the "OPTIONAL WIP BANNER" block at the bottom of <body> when layout is final.
+   * OPTIONAL DEBUG: #participantDebugHotspot + #participantDebugMenu, their CSS, buildDummySheetPayload,
+   *   sendDebugDummyRowToSheet, open/closeParticipantDebugMenu, and closeParticipantDebugMenu() in submitParticipantInfo.
+   * Google Sheets: keep GOOGLE_SHEETS_WEBAPP_URL, buildSheetPayload, sendResultsToGoogleSheets,
+   * submitSheetResults, retrySheetSubmit, and submitSavedResultsToSheet unless you drop Sheets.
+   */
+
+  /** KEEP: Apps Script Web App URL (ends with /exec). Deploy: Execute as you, Who has access: Anyone. */
+  const GOOGLE_SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwyC5rmTKQpB8Vx-UzWZ6F320mvdHb0k0LSFIljccxjBrhXwTqLI6hxy5Dve6MLqn_ThA/exec";
+
   const grid = document.getElementById("grid");
   const stateList = document.getElementById("stateList");
   const taskText = document.getElementById("taskText");
@@ -52,35 +148,41 @@
   let state = [], startTime = null, timerInterval, currentTaskIndex = 0;
   let results = [], pressCounts = [], taskLabels = [], currentPressCount = 0, selectedGroup = null;
 
+  // NEW participant variables
+  let participantInitials = "";
+  let participantAge = "";
+  let participantSex = "";
+
   const numericLabels = ["1","2","3","4","5","6","7","8"];
   const systemLabels = ["Engine","Oxygen","Fuel","Airlock","Life Support","Comms","Battery","Lights"];
   let currentLabels = numericLabels;
 
-  // All tasks: text = "Turn all buttons ON", target = all true, initialState = exactly 5 false (incorrect)
-  // The 5 incorrect (false) buttons vary per task for variety.
-
+  /* Each initialState: exactly three true, five false — hardcoded permutations (indices 0–7 = buttons 1–8). */
   const taskGroup1 = [
-    { label: '1-1', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,false,false,false,false,true,true,true],  displayOrder: [0,1,2,3,4,5,6,7], labels: numericLabels },
-    { label: '1-2', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [true,false,false,false,false,false,true,true],  displayOrder: [0,1,2,3,4,5,6,7], labels: numericLabels },
-    { label: '1-3', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [true,true,false,false,false,false,false,true],  displayOrder: [0,1,2,3,4,5,6,7], labels: numericLabels },
-    { label: '1-4', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [true,true,true,false,false,false,false,false], displayOrder: [0,1,2,3,4,5,6,7], labels: numericLabels },
-    { label: '1-5', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,true,true,true,false,false,false,false], displayOrder: [0,1,2,3,4,5,6,7], labels: numericLabels }
+    { label: '1-1', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [true,false,false,true,false,false,false,true],  displayOrder: [0,1,2,3,4,5,6,7], labels: numericLabels },
+    { label: '1-2', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,true,false,false,true,false,true,false],  displayOrder: [0,1,2,3,4,5,6,7], labels: numericLabels },
+    { label: '1-3', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,false,true,false,false,true,false,true],  displayOrder: [0,1,2,3,4,5,6,7], labels: numericLabels },
+    { label: '1-4', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [true,true,false,false,false,true,false,false], displayOrder: [0,1,2,3,4,5,6,7], labels: numericLabels },
+    { label: '1-5', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,false,true,true,false,false,true,false], displayOrder: [0,1,2,3,4,5,6,7], labels: numericLabels },
+    { label: '1-6', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,true,false,false,false,true,false,true], displayOrder: [0,1,2,3,4,5,6,7], labels: numericLabels }
   ];
 
   const taskGroup2 = [
-    { label: '2-1', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,false,true,true,true,false,false,false], displayOrder: [3,7,1,5,0,6,2,4], labels: numericLabels },
+    { label: '2-1', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [true,false,false,false,true,false,false,true], displayOrder: [3,7,1,5,0,6,2,4], labels: numericLabels },
     { label: '2-2', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,false,false,true,true,true,false,false], displayOrder: [3,7,1,5,0,6,2,4], labels: numericLabels },
-    { label: '2-3', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [true,false,false,false,true,true,false,false], displayOrder: [3,7,1,5,0,6,2,4], labels: numericLabels },
-    { label: '2-4', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,true,false,false,false,true,true,false], displayOrder: [3,7,1,5,0,6,2,4], labels: numericLabels },
-    { label: '2-5', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,false,true,false,false,false,true,true], displayOrder: [3,7,1,5,0,6,2,4], labels: numericLabels }
+    { label: '2-3', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [true,false,true,false,false,true,false,false], displayOrder: [3,7,1,5,0,6,2,4], labels: numericLabels },
+    { label: '2-4', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,true,false,true,false,false,false,true], displayOrder: [3,7,1,5,0,6,2,4], labels: numericLabels },
+    { label: '2-5', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,false,true,false,true,false,true,false], displayOrder: [3,7,1,5,0,6,2,4], labels: numericLabels },
+    { label: '2-6', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,true,true,false,false,true,false,false], displayOrder: [3,7,1,5,0,6,2,4], labels: numericLabels }
   ];
 
   const taskGroup3 = [
-    { label: '3-1', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,false,false,false,false,true,true,true],  dynamicSort: true, labels: numericLabels },
-    { label: '3-2', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [true,false,false,true,false,false,true,false],  dynamicSort: true, labels: numericLabels },
-    { label: '3-3', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,true,false,false,true,false,false,true],  dynamicSort: true, labels: numericLabels },
-    { label: '3-4', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [true,true,false,false,false,false,false,true],  dynamicSort: true, labels: numericLabels },
-    { label: '3-5', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,false,true,true,false,false,false,true],  dynamicSort: true, labels: numericLabels }
+    { label: '3-1', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,false,false,false,true,false,true,true],  dynamicSortReverse: true, labels: numericLabels },
+    { label: '3-2', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [true,false,false,true,false,false,true,false],  dynamicSortReverse: true, labels: numericLabels },
+    { label: '3-3', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,false,true,false,false,true,true,false],  dynamicSortReverse: true, labels: numericLabels },
+    { label: '3-4', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [true,true,false,false,false,false,false,true],  dynamicSortReverse: true, labels: numericLabels },
+    { label: '3-5', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [true,false,false,false,false,true,true,false],  dynamicSortReverse: true, labels: numericLabels },
+    { label: '3-6', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,false,false,true,true,false,true,false],  dynamicSortReverse: true, labels: numericLabels }
   ];
 
   let tasks = [];
@@ -103,6 +205,10 @@
       order=[...state.keys()].sort((a,b)=>(state[b]===true)-(state[a]===true));
       let seenOff=false;
       order.forEach(i=>{if(!state[i]&&!seenOff){text+="<br>";seenOff=true;} text+=`${currentLabels[i]}: ${state[i]?'ON':'OFF'}<br>`;});
+    } else if(tasks[currentTaskIndex]?.dynamicSortReverse){
+      order=[...state.keys()].sort((a,b)=>(state[a]===true)-(state[b]===true));
+      let seenOn=false;
+      order.forEach(i=>{if(state[i]&&!seenOn){text+="<br>";seenOn=true;} text+=`${currentLabels[i]}: ${state[i]?'ON':'OFF'}<br>`;});
     } else {
       order=tasks[currentTaskIndex]?.displayOrder||[0,1,2,3,4,5,6,7];
       order.forEach(i=>{text+=`${currentLabels[i]}: ${state[i]?'ON':'OFF'}<br>`;});
@@ -142,6 +248,123 @@
     timerInterval=setInterval(()=>{const elapsed=(performance.now()-startTime)/1000; timerEl.innerText="Time: "+elapsed.toFixed(3)+" s";},50);
   }
 
+  /* KEEP: one timing field per completed task (keys = task labels, e.g. 1-1 … 3-6). Update Apps Script appendRow if you add/remove tasks. */
+  function buildSheetPayload() {
+    const payload = {
+      initials: participantInitials,
+      age: participantAge,
+      sex: participantSex,
+    };
+    for (let i = 0; i < taskLabels.length; i++) {
+      payload[taskLabels[i]] = Number(results[i].toFixed(3));
+    }
+    return payload;
+  }
+
+  /* OPTIONAL DEBUG: remove this function and sendDebugDummyRowToSheet for production-only builds */
+  function buildDummySheetPayload() {
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(11, 23);
+    const payload = {
+      initials: "DBG_" + stamp,
+      age: "99",
+      sex: "Other",
+    };
+    const tasksPerGroup = taskGroup1.length;
+    for (let b = 1; b <= 3; b++) {
+      for (let t = 1; t <= tasksPerGroup; t++) {
+        payload[b + "-" + t] = Number(b + "." + String(t).padStart(3, "0"));
+      }
+    }
+    return payload;
+  }
+
+  function sendDebugDummyRowToSheet() {
+    const statusEl = document.getElementById("debugSendStatus");
+    if (statusEl) statusEl.textContent = "Sending test row…";
+    const payload = buildDummySheetPayload();
+    sendResultsToGoogleSheets(payload)
+      .then((res) => {
+        if (statusEl) {
+          const ok = res && res.status === "success" ? "success" : "response received";
+          statusEl.textContent = "Test row sent (" + ok + "). Find initials: " + payload.initials;
+        }
+      })
+      .catch((err) => {
+        if (statusEl) statusEl.textContent = "Failed: " + err.message;
+        console.error(err);
+      });
+  }
+
+  /* OPTIONAL DEBUG: paired with #participantDebugMenu / hotspot */
+  function openParticipantDebugMenu() {
+    const m = document.getElementById("participantDebugMenu");
+    if (m) m.style.display = "block";
+  }
+
+  function closeParticipantDebugMenu() {
+    const m = document.getElementById("participantDebugMenu");
+    if (m) m.style.display = "none";
+  }
+
+  /* KEEP: POSTs JSON to your Apps Script Web App. */
+  function sendResultsToGoogleSheets(payload) {
+    if (!GOOGLE_SHEETS_WEBAPP_URL || !GOOGLE_SHEETS_WEBAPP_URL.startsWith("http")) {
+      return Promise.reject(new Error("Set GOOGLE_SHEETS_WEBAPP_URL in index.html to your /exec URL"));
+    }
+    return fetch(GOOGLE_SHEETS_WEBAPP_URL, {
+      method: "POST",
+      redirect: "follow",
+      // Use text/plain (not application/json) so the browser skips CORS preflight.
+      // Apps Script still receives the same string in e.postData.contents — JSON.parse works unchanged.
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload),
+    }).then(async (res) => {
+      const text = await res.text();
+      if (!res.ok) throw new Error("Server returned " + res.status + ": " + text.slice(0, 200));
+      try {
+        return JSON.parse(text);
+      } catch {
+        return { status: "unknown", raw: text };
+      }
+    });
+  }
+
+  /* KEEP: retry-after-failure needs these two variables + submitSheetResults + retrySheetSubmit. */
+  let lastSubmissionSummaryHtml = "";
+  let lastSubmissionPayload = null;
+
+  /* KEEP: final submission UI + optional retry button on error. */
+  function submitSheetResults(summaryHtml, payload) {
+    lastSubmissionSummaryHtml = summaryHtml;
+    lastSubmissionPayload = payload;
+    taskText.innerHTML = summaryHtml + "<br><br><em>Submitting results…</em>";
+    return sendResultsToGoogleSheets(payload)
+      .then(() => {
+        lastSubmissionPayload = null;
+        taskText.innerHTML = summaryHtml + "<br><br><strong>Results submitted successfully.</strong>";
+      })
+      .catch((err) => {
+        taskText.innerHTML =
+          summaryHtml +
+          "<br><br><strong>Could not submit results.</strong> Save a screenshot for the researcher. (" +
+          err.message +
+          ')<br><br><button type="button" class="sheet-action-btn" onclick="retrySheetSubmit()">Retry submission</button>';
+        console.error(err);
+      });
+  }
+
+  /* KEEP: used by inline onclick on the Retry button after a failed sheet submit. */
+  function retrySheetSubmit() {
+    if (!lastSubmissionPayload) return;
+    submitSheetResults(lastSubmissionSummaryHtml, lastSubmissionPayload);
+  }
+
+  /* KEEP: first manual send after all tasks; same payload as retry uses. */
+  function submitSavedResultsToSheet() {
+    if (!lastSubmissionPayload) return;
+    submitSheetResults(lastSubmissionSummaryHtml, lastSubmissionPayload);
+  }
+
   function checkTask(){
     if(!startTime) return;
     const complete=state.every((val,i)=>val===tasks[currentTaskIndex].target[i]);
@@ -158,17 +381,52 @@
         startButton.style.display="block";
       } else {
         let summary="<strong>All Tasks Complete</strong><br><br>";
-        summary+=`<strong>Group: ${selectedGroup}</strong><br><br>`;
+        summary+=`<strong>Participant:</strong> ${participantInitials}<br>`;
+        summary+=`<strong>Age:</strong> ${participantAge}<br>`;
+        summary+=`<strong>Sex:</strong> ${participantSex}<br><br>`;
+        summary+=`<strong>Group:</strong> ${selectedGroup}<br><br>`;
         for(let i=0;i<tasks.length;i++){
           summary+=`Task ${taskLabels[i]}: ${results[i].toFixed(3)} s, ${pressCounts[i]} presses<br>`;
         }
-        taskText.innerHTML=summary; taskText.style.display="block"; startButton.style.display="none";
+        taskText.style.display = "block";
+        startButton.style.display = "none";
+
+        const payload = buildSheetPayload();
+        lastSubmissionSummaryHtml = summary;
+        lastSubmissionPayload = payload;
+        taskText.innerHTML =
+          summary +
+          "<br><br><strong>Click the button below to submit your results.</strong><br>" +
+          '<button type="button" class="sheet-action-btn" onclick="submitSavedResultsToSheet()">Send results</button>';
       }
     }
   }
 
+  // NEW function
+  function submitParticipantInfo(){
+    const initials = document.getElementById("initialsInput").value.trim();
+    const age = document.getElementById("ageInput").value.trim();
+    const sex = document.getElementById("sexInput").value;
+
+    if(!initials || !age || !sex){
+      alert("Please fill out all fields.");
+      return;
+    }
+
+    participantInitials = initials;
+    participantAge = age;
+    participantSex = sex;
+
+    closeParticipantDebugMenu();
+    document.getElementById("participantOverlay").style.display = "none";
+  }
+
   applyLabels(numericLabels); state=Array(8).fill(false); updateStateDisplay();
 </script>
+
+<!-- === OPTIONAL WIP BANNER: comment out this entire <div> when the layout is final === -->
 <div style="position: fixed; bottom: 10px; width: 100%; text-align: center; font-size: 12px; color: #333;">Active WIP - Current layout may not reflect final design</div>
+<!-- === END OPTIONAL WIP BANNER === -->
+
 </body>
 </html>
