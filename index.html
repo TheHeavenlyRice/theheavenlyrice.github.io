@@ -9,11 +9,56 @@
     .instructions { width: 33%; background-color: black; color: #00ff00; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
     .state-list { margin-top: 20px; font-size: 22px; line-height: 2; width: 100%; }
     .controls { width: 67%; background-color: #888; display: flex; justify-content: center; align-items: center; }
-    .grid { display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, 1fr); gap: 20px; width: 80%; }
-    .button-container { text-align: center; }
-    .label { margin-bottom: 5px; font-weight: bold; }
-    button { width: 100%; aspect-ratio: 1 / 1; font-size: 16px; background-color: lightgray; border: 2px solid black; cursor: pointer; transition: background-color 0.15s ease; }
-    button.flash { background-color: #bbb; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-template-rows: repeat(2, 1fr);
+      gap: 20px;
+      width: 80%;
+      min-height: 0;
+      min-width: 0;
+    }
+    .grid .button-container {
+      text-align: center;
+      min-width: 0;
+      min-height: 0;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: flex-start;
+      overflow: hidden;
+    }
+    .grid button.grid-toggle {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      max-height: 100%;
+      flex: 0 0 auto;
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
+      background-color: lightgray;
+      border: 2px solid black;
+      cursor: pointer;
+      transition: background-color 0.15s ease;
+      font: inherit;
+      color: inherit;
+      overflow: hidden;
+    }
+    .grid button.grid-toggle .btn-label {
+      font-weight: bold;
+      line-height: 1.1;
+      text-align: center;
+      overflow-wrap: break-word;
+      word-break: break-word;
+      max-width: 100%;
+      max-height: 100%;
+      overflow: hidden;
+      font-size: clamp(15px, 4.2vmin, 40px);
+    }
+    .grid button.grid-toggle.flash { background-color: #bbb; }
     .start-button { width: 400px; padding: 10px 0; font-weight: bold; font-size: 18px; text-align: center; background-color: lightgray; border: 2px solid black; cursor: pointer; height: 50px; }
     #groupOverlay button { width: 120px; height: 80px; font-size: 24px; font-weight: bold; }
     /* Overrides global square grid buttons — compact horizontal bar for sheet actions */
@@ -137,7 +182,7 @@
    */
 
   /** KEEP: Apps Script Web App URL (ends with /exec). Deploy: Execute as you, Who has access: Anyone. */
-  const GOOGLE_SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwyC5rmTKQpB8Vx-UzWZ6F320mvdHb0k0LSFIljccxjBrhXwTqLI6hxy5Dve6MLqn_ThA/exec";
+  const GOOGLE_SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbz9Hq9CVEC_Klc98KNozsfYAUb3vGqg3nL1uu2eBCVTYjoU4uHxb8C3kSbSWGbYwzaAsw/exec";
 
   /** If true, after each block of tasks (same length as taskGroup1) the participant must press Continue before "Start Next Task" appears. */
   var PAUSE_BETWEEN_TASK_GROUPS = true;
@@ -189,12 +234,12 @@
   ];
 
   const taskGroup2 = [
-    { label: '2-1', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [true,false,false,false,true,false,false,true], displayOrder: [3,7,1,5,0,6,2,4], labels: numericLabels },
-    { label: '2-2', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,false,false,true,true,true,false,false], displayOrder: [3,7,1,5,0,6,2,4], labels: numericLabels },
-    { label: '2-3', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [true,false,true,false,false,true,false,false], displayOrder: [3,7,1,5,0,6,2,4], labels: numericLabels },
-    { label: '2-4', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,true,false,true,false,false,false,true], displayOrder: [3,7,1,5,0,6,2,4], labels: numericLabels },
-    { label: '2-5', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,false,true,false,true,false,true,false], displayOrder: [3,7,1,5,0,6,2,4], labels: numericLabels },
-    { label: '2-6', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,true,true,false,false,true,false,false], displayOrder: [3,7,1,5,0,6,2,4], labels: numericLabels }
+    { label: '2-1', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [true,false,false,false,true,false,false,true], displayOrder: [5,0,7,2,3,6,1,4], labels: numericLabels },
+    { label: '2-2', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,false,false,true,true,true,false,false], displayOrder: [5,0,7,2,3,6,1,4], labels: numericLabels },
+    { label: '2-3', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [true,false,true,false,false,true,false,false], displayOrder: [5,0,7,2,3,6,1,4], labels: numericLabels },
+    { label: '2-4', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,true,false,true,false,false,false,true], displayOrder: [5,0,7,2,3,6,1,4], labels: numericLabels },
+    { label: '2-5', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,false,true,false,true,false,true,false], displayOrder: [5,0,7,2,3,6,1,4], labels: numericLabels },
+    { label: '2-6', text: "Turn all buttons ON", target: [true,true,true,true,true,true,true,true], initialState: [false,true,true,false,false,true,false,false], displayOrder: [5,0,7,2,3,6,1,4], labels: numericLabels }
   ];
 
   const taskGroup3 = [
@@ -211,9 +256,10 @@
   const buttons = [], labelEls = [];
   for (let i=0;i<8;i++){
     const container=document.createElement("div"); container.className="button-container";
-    const label=document.createElement("div"); label.className="label";
-    const button=document.createElement("button"); button.onclick=()=>toggleButton(i,button);
-    container.appendChild(label); container.appendChild(button); grid.appendChild(container);
+    const button=document.createElement("button"); button.type="button"; button.className="grid-toggle";
+    const label=document.createElement("span"); label.className="btn-label";
+    button.appendChild(label); button.onclick=()=>toggleButton(i,button);
+    container.appendChild(button); grid.appendChild(container);
     buttons.push(button); labelEls.push(label);
   }
 
@@ -265,6 +311,7 @@
   function enterSandbox(){
     inSandbox=true;
     currentTaskIndex=0;
+    stateList.style.display = "";
     document.getElementById("phaseTitle").innerText="Sandbox";
     applyLabels(numericLabels);
     state=Array(8).fill(false);
@@ -279,6 +326,7 @@
   function exitSandbox(){
     if(!inSandbox) return;
     inSandbox=false;
+    stateList.style.display = "none";
     document.getElementById("phaseTitle").innerText="Instructions";
     taskText.style.display="none";
     taskText.innerText="";
@@ -304,6 +352,7 @@
 
   function startTask(){
     if(!selectedGroup||inSandbox||awaitingBetweenGroupContinue) return;
+    stateList.style.display = "";
     currentPressCount=0;
     startButton.style.display="none";
     const task=tasks[currentTaskIndex];
@@ -311,20 +360,23 @@
     state=[...task.initialState];
     updateStateDisplay();
     taskText.innerText=task.text; taskText.style.display="block";
+    /* Timer stays hidden: no on-screen time pressure; interval still drives precise timing into results. */
     timerEl.style.display="none";
     startTime=performance.now();
     timerInterval=setInterval(()=>{const elapsed=(performance.now()-startTime)/1000; timerEl.innerText="Time: "+elapsed.toFixed(3)+" s";},50);
   }
 
-  /* KEEP: one timing field per completed task (keys = task labels, e.g. 1-1 … 3-6). Update Apps Script appendRow if you add/remove tasks. */
+  /* KEEP: one timing field per completed task (keys = task labels, e.g. 1-1 … 3-6); matching *_presses keys for button counts; group = participant condition (1–6). Update Apps Script appendRow if you add/remove tasks. */
   function buildSheetPayload() {
     const payload = {
       initials: participantInitials,
       age: participantAge,
       sex: participantSex,
+      group: selectedGroup,
     };
     for (let i = 0; i < taskLabels.length; i++) {
       payload[taskLabels[i]] = Number(results[i].toFixed(3));
+      payload[taskLabels[i] + "_presses"] = pressCounts[i];
     }
     return payload;
   }
@@ -336,11 +388,14 @@
       initials: "DBG_" + stamp,
       age: "99",
       sex: "Other",
+      group: 0,
     };
     const tasksPerGroup = taskGroup1.length;
     for (let b = 1; b <= 3; b++) {
       for (let t = 1; t <= tasksPerGroup; t++) {
-        payload[b + "-" + t] = Number(b + "." + String(t).padStart(3, "0"));
+        const key = b + "-" + t;
+        payload[key] = Number(b + "." + String(t).padStart(3, "0"));
+        payload[key + "_presses"] = b * 10 + t;
       }
     }
     return payload;
@@ -450,6 +505,7 @@
         if(atGroupBoundary){
           awaitingBetweenGroupContinue=true;
           taskText.innerText="You have finished this section. Take a short break. Press Continue when you are ready for the next section.";
+          stateList.style.display = "none";
           taskText.style.display="block";
           timerEl.style.display="none";
           startButton.innerText="Continue";
@@ -459,6 +515,7 @@
           startButton.style.display="block";
         }
       } else {
+        stateList.style.display = "none";
         let summary="<strong>All Tasks Complete</strong><br><br>";
         summary+=`<strong>Participant:</strong> ${participantInitials}<br>`;
         summary+=`<strong>Age:</strong> ${participantAge}<br>`;
@@ -504,7 +561,7 @@
 </script>
 
 <!-- === OPTIONAL WIP BANNER: comment out this entire <div> when the layout is final === -->
-<div style="position: fixed; bottom: 10px; width: 100%; text-align: center; font-size: 12px; color: #333;">Active WIP - Current layout may not reflect final design</div>
+ <!-- <div style="position: fixed; bottom: 10px; width: 100%; text-align: center; font-size: 12px; color: #333;">Active WIP - Current layout may not reflect final design</div> -->
 <!-- === END OPTIONAL WIP BANNER === -->
 
 </body>
