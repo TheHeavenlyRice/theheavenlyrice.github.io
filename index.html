@@ -128,13 +128,15 @@
   <div style="display:flex;flex-direction:column;gap:15px;margin-top:20px;">
     <input id="initialsInput" type="text" placeholder="Initials" style="padding:10px;font-size:16px;">
     <input id="ageInput" type="number" placeholder="Age" style="padding:10px;font-size:16px;">
-    <select id="sexInput" style="padding:10px;font-size:16px;">
+    <select id="sexInput" style="padding:10px;font-size:16px;" onchange="syncSexNotListedField()">
       <option value="">Select Sex</option>
       <option value="Male">Male</option>
       <option value="Female">Female</option>
-      <option value="Other">Other</option>
-      <option value="Prefer not to say">Prefer not to say</option>
+      <option value="Intersex">Intersex</option>
+      <option value="Not Listed">Not Listed</option>
+      <option value="Prefer not to reply">Prefer not to reply</option>
     </select>
+    <input id="sexNotListedDetail" type="text" placeholder="Please specify" style="display:none;padding:10px;font-size:16px;max-width:280px;box-sizing:border-box;">
     <button type="button" class="sheet-action-btn" onclick="submitParticipantInfo()">Continue</button>
   </div>
   <!-- OPTIONAL DEBUG: corner hotspot opens debug menu (see #participantDebugMenu); remove hotspot + menu for production -->
@@ -189,7 +191,7 @@
 
   /** New Audio per play so rapid clicks overlap; one element + currentTime=0 would restart and cut off each play. */
   const CLICK_SOUND_URL = "click.mp3";
-  const CLICK_SOUND_START_SEC = 0.018;
+  const CLICK_SOUND_START_SEC = 0.022;
   function playGridClick() {
     const a = new Audio(CLICK_SOUND_URL);
     a.volume = 0.5;
@@ -538,20 +540,43 @@
     }
   }
 
+  function syncSexNotListedField() {
+    const sel = document.getElementById("sexInput");
+    const detail = document.getElementById("sexNotListedDetail");
+    if (!sel || !detail) return;
+    if (sel.value === "Not Listed") {
+      detail.style.display = "block";
+    } else {
+      detail.style.display = "none";
+      detail.value = "";
+    }
+  }
+
   // NEW function
   function submitParticipantInfo(){
     const initials = document.getElementById("initialsInput").value.trim();
     const age = document.getElementById("ageInput").value.trim();
     const sex = document.getElementById("sexInput").value;
+    const notListedDetail = document.getElementById("sexNotListedDetail");
 
     if(!initials || !age || !sex){
       alert("Please fill out all fields.");
       return;
     }
+    if (sex === "Not Listed") {
+      const extra = notListedDetail ? notListedDetail.value.trim() : "";
+      if (!extra) {
+        alert("Please specify (required if Not Listed).");
+        return;
+      }
+    }
 
     participantInitials = initials;
     participantAge = age;
-    participantSex = sex;
+    participantSex =
+      sex === "Not Listed"
+        ? "Not Listed - " + (notListedDetail ? notListedDetail.value.trim() : "")
+        : sex;
 
     closeParticipantDebugMenu();
     document.getElementById("participantOverlay").style.display = "none";
