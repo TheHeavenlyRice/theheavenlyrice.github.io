@@ -116,9 +116,9 @@
 
 <div class="container">
   <div class="instructions">
-    <h2>Instructions</h2>
+    <h2 id="phaseTitle">Instructions</h2>
     <p id="taskText" style="display:none;"></p>
-    <button id="startButton" class="start-button" onclick="startTask()">Start Task</button>
+    <button id="startButton" class="start-button" type="button" onclick="handlePrimaryAction()">Start Task</button>
     <p id="timer" style="display:none;">Time: 0.000 s</p>
     <div class="state-list" id="stateList"></div>
   </div>
@@ -139,6 +139,25 @@
   /** KEEP: Apps Script Web App URL (ends with /exec). Deploy: Execute as you, Who has access: Anyone. */
   const GOOGLE_SHEETS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwyC5rmTKQpB8Vx-UzWZ6F320mvdHb0k0LSFIljccxjBrhXwTqLI6hxy5Dve6MLqn_ThA/exec";
 
+  /** If true, after each block of tasks (same length as taskGroup1) the participant must press Continue before "Start Next Task" appears. */
+  var PAUSE_BETWEEN_TASK_GROUPS = true;
+
+  /** New Audio per play so rapid clicks overlap; one element + currentTime=0 would restart and cut off each play. */
+  const CLICK_SOUND_URL = "click.mp3";
+  const CLICK_SOUND_START_SEC = 0.018;
+  function playGridClick() {
+    const a = new Audio(CLICK_SOUND_URL);
+    a.volume = 0.5;
+    const playFromOffset = () => {
+      try {
+        a.currentTime = CLICK_SOUND_START_SEC;
+      } catch {}
+      a.play().catch(() => {});
+    };
+    if (a.readyState >= 1) playFromOffset();
+    else a.addEventListener("loadedmetadata", playFromOffset, { once: true });
+  }
+
   const grid = document.getElementById("grid");
   const stateList = document.getElementById("stateList");
   const taskText = document.getElementById("taskText");
@@ -147,6 +166,8 @@
 
   let state = [], startTime = null, timerInterval, currentTaskIndex = 0;
   let results = [], pressCounts = [], taskLabels = [], currentPressCount = 0, selectedGroup = null;
+  let inSandbox = false;
+  let awaitingBetweenGroupContinue = false;
 
   // NEW participant variables
   let participantInitials = "";
@@ -197,10 +218,16 @@
   }
 
   function applyLabels(labels){currentLabels=labels; labelEls.forEach((el,i)=>el.innerText=labels[i]);}
-  function toggleButton(index,button){currentPressCount++; state[index]=!state[index]; button.classList.add("flash"); setTimeout(()=>button.classList.remove("flash"),150); updateStateDisplay(); checkTask();}
+  function toggleButton(index,button){playGridClick(); if(!inSandbox) currentPressCount++; state[index]=!state[index]; button.classList.add("flash"); setTimeout(()=>button.classList.remove("flash"),150); updateStateDisplay(); checkTask();}
   function updateStateDisplay(){
     let text="<strong>Current State:</strong><br>";
     let order;
+    if(inSandbox){
+      order=[0,1,2,3,4,5,6,7];
+      order.forEach(i=>{text+=`${currentLabels[i]}: ${state[i]?'ON':'OFF'}<br>`;});
+      stateList.innerHTML=text;
+      return;
+    }
     if(tasks[currentTaskIndex]?.dynamicSort){
       order=[...state.keys()].sort((a,b)=>(state[b]===true)-(state[a]===true));
       let seenOff=false;
@@ -218,6 +245,7 @@
 
   function selectGroup(group){
     selectedGroup = group;
+    awaitingBetweenGroupContinue=false;
     document.getElementById('groupOverlay').style.display = 'none';
     currentTaskIndex = 0;
     startButton.innerText = "Start Task";
@@ -231,11 +259,51 @@
       case 6: tasks=[...taskGroup3, ...taskGroup2, ...taskGroup1]; break;
     }
 
-    startButton.style.display='block';
+    enterSandbox();
+  }
+
+  function enterSandbox(){
+    inSandbox=true;
+    currentTaskIndex=0;
+    document.getElementById("phaseTitle").innerText="Sandbox";
+    applyLabels(numericLabels);
+    state=Array(8).fill(false);
+    updateStateDisplay();
+    taskText.innerText="Try the controls on the right. Nothing is timed here. When you are ready to begin the study, press the button below.";
+    taskText.style.display="block";
+    timerEl.style.display="none";
+    startButton.innerText="Continue to study tasks";
+    startButton.style.display="block";
+  }
+
+  function exitSandbox(){
+    if(!inSandbox) return;
+    inSandbox=false;
+    document.getElementById("phaseTitle").innerText="Instructions";
+    taskText.style.display="none";
+    taskText.innerText="";
+    applyLabels(numericLabels);
+    state=Array(8).fill(false);
+    updateStateDisplay();
+    startButton.innerText="Start Task";
+    startButton.style.display="block";
+  }
+
+  function handlePrimaryAction(){
+    if(inSandbox){ exitSandbox(); return; }
+    if(awaitingBetweenGroupContinue){
+      awaitingBetweenGroupContinue=false;
+      taskText.style.display="none";
+      taskText.innerText="";
+      startButton.innerText="Start Next Task";
+      startButton.style.display="block";
+      return;
+    }
+    startTask();
   }
 
   function startTask(){
-    if(!selectedGroup) return;
+    if(!selectedGroup||inSandbox||awaitingBetweenGroupContinue) return;
     currentPressCount=0;
     startButton.style.display="none";
     const task=tasks[currentTaskIndex];
@@ -377,8 +445,19 @@
       startTime=null;
       currentTaskIndex++;
       if(currentTaskIndex<tasks.length){
-        startButton.innerText="Start Next Task";
-        startButton.style.display="block";
+        const tasksPerBlock=taskGroup1.length;
+        const atGroupBoundary=PAUSE_BETWEEN_TASK_GROUPS&&currentTaskIndex%tasksPerBlock===0;
+        if(atGroupBoundary){
+          awaitingBetweenGroupContinue=true;
+          taskText.innerText="You have finished this section. Take a short break. Press Continue when you are ready for the next section.";
+          taskText.style.display="block";
+          timerEl.style.display="none";
+          startButton.innerText="Continue";
+          startButton.style.display="block";
+        } else {
+          startButton.innerText="Start Next Task";
+          startButton.style.display="block";
+        }
       } else {
         let summary="<strong>All Tasks Complete</strong><br><br>";
         summary+=`<strong>Participant:</strong> ${participantInitials}<br>`;
